@@ -2,22 +2,30 @@
 
 import { useRef, useState } from "react";
 
+const voices = [
+  { id: "marin", label: "MARIN" },
+  { id: "sage", label: "SAGE" },
+  { id: "fable", label: "FABLE" },
+  { id: "verse", label: "VERSE" },
+  { id: "shimmer", label: "SHIMMER" },
+  { id: "coral", label: "CORAL" },
+];
+
 export default function Home() {
   const [source, setSource] = useState("");
   const [translated, setTranslated] = useState("");
   const [status, setStatus] = useState("READY");
   const [recording, setRecording] = useState(false);
-
-  const [voice, setVoice] = useState("coral");
+  const [voice, setVoice] = useState("marin");
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  async function speak(text: string) {
+  async function speak(text: string, selectedVoice = voice) {
     if (!text.trim()) return;
 
-    setStatus("SPEAKING");
+    setStatus(`SPEAKING // ${selectedVoice.toUpperCase()}`);
 
     try {
       const res = await fetch("/api/speak", {
@@ -28,11 +36,13 @@ export default function Home() {
         body: JSON.stringify({
           text,
           language: "ja",
-          voice,
+          voice: selectedVoice,
         }),
       });
 
       if (!res.ok) {
+        const errorText = await res.text();
+        console.error(errorText);
         throw new Error("speech failed");
       }
 
@@ -79,11 +89,12 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "translation failed");
+        throw new Error(
+          data.error || "translation failed"
+        );
       }
 
       const result = data.translation || "";
-
       setTranslated(result);
 
       if (result) {
@@ -122,7 +133,9 @@ export default function Home() {
           type: recorder.mimeType || "audio/webm",
         });
 
-        stream.getTracks().forEach((track) => track.stop());
+        stream.getTracks().forEach((track) =>
+          track.stop()
+        );
 
         const form = new FormData();
 
@@ -150,7 +163,6 @@ export default function Home() {
           }
 
           const text = data.text || "";
-
           setSource(text);
 
           if (text) {
@@ -165,7 +177,6 @@ export default function Home() {
       };
 
       recorder.start();
-
       setRecording(true);
       setStatus("LISTENING");
     } catch (error) {
@@ -179,9 +190,12 @@ export default function Home() {
     setRecording(false);
   }
 
-  async function testVoice() {
+  async function testVoice(selectedVoice: string) {
+    setVoice(selectedVoice);
+
     await speak(
-      "こんにちは。今日はどうする？ 私に任せてね。大丈夫だよ。"
+      "こんにちは。今日はどうする？ 私に任せてね。大丈夫だよ。",
+      selectedVoice
     );
   }
 
@@ -201,48 +215,50 @@ export default function Home() {
 
       <p>STATUS: {status}</p>
 
+      <h2>VOICE TEST</h2>
+
       <div
         style={{
-          marginTop: "20px",
-          marginBottom: "20px",
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(2, minmax(0, 1fr))",
+          gap: "10px",
+          marginBottom: "25px",
         }}
       >
-        <p>VOICE SELECT</p>
-
-        <select
-          value={voice}
-          onChange={(e) =>
-            setVoice(e.target.value)
-          }
-          style={{
-            padding: "12px",
-            fontSize: "18px",
-            marginRight: "10px",
-          }}
-        >
-          <option value="coral">
-            FEMALE A - CORAL
-          </option>
-
-          <option value="shimmer">
-            FEMALE B - SHIMMER
-          </option>
-
-          <option value="nova">
-            FEMALE C - NOVA
-          </option>
-        </select>
-
-        <button
-          onClick={testVoice}
-          style={{
-            padding: "12px 18px",
-            fontSize: "16px",
-          }}
-        >
-          ▶ TEST VOICE
-        </button>
+        {voices.map((item) => (
+          <button
+            key={item.id}
+            onClick={() =>
+              testVoice(item.id)
+            }
+            style={{
+              padding: "16px 10px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              border:
+                voice === item.id
+                  ? "2px solid white"
+                  : "1px solid #555",
+              background:
+                voice === item.id
+                  ? "#252525"
+                  : "#111",
+              color: "white",
+              borderRadius: "8px",
+            }}
+          >
+            ▶ {item.label}
+          </button>
+        ))}
       </div>
+
+      <p>
+        SELECTED VOICE:{" "}
+        <strong>
+          {voice.toUpperCase()}
+        </strong>
+      </p>
 
       <textarea
         value={source}
@@ -257,10 +273,17 @@ export default function Home() {
           fontSize: "18px",
           background: "#111",
           color: "white",
+          boxSizing: "border-box",
         }}
       />
 
-      <div style={{ marginTop: "20px" }}>
+      <div
+        style={{
+          marginTop: "20px",
+          display: "flex",
+          gap: "10px",
+        }}
+      >
         <button
           onClick={
             recording
@@ -269,7 +292,7 @@ export default function Home() {
           }
           style={{
             padding: "20px",
-            marginRight: "10px",
+            flex: 1,
           }}
         >
           {recording
@@ -281,6 +304,7 @@ export default function Home() {
           onClick={() => translate()}
           style={{
             padding: "20px",
+            flex: 1,
           }}
         >
           TRANSLATE
@@ -307,6 +331,7 @@ export default function Home() {
         style={{
           padding: "16px 24px",
           fontSize: "18px",
+          width: "100%",
         }}
       >
         ▶ REPLAY VOICE
