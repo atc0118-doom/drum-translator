@@ -23,11 +23,23 @@ export default function Home() {
   async function playShiftedVoice(blob: Blob) {
     setStatus("PITCH PROCESSING");
 
+    try {
+      if (
+        audioContextRef.current &&
+        audioContextRef.current.state !== "closed"
+      ) {
+        await audioContextRef.current.close();
+      }
+    } catch {}
+
     const arrayBuffer = await blob.arrayBuffer();
 
     const audioContext = new AudioContext();
-
     audioContextRef.current = audioContext;
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
 
     await FormantCorrectionNode.register(
       audioContext,
@@ -39,19 +51,19 @@ export default function Home() {
     );
 
     const sourceNode = audioContext.createBufferSource();
-
     sourceNode.buffer = decoded;
 
     const formantNode = new FormantCorrectionNode({
       context: audioContext,
     });
 
+    // +6半音
     formantNode.pitchSemitones.value = PITCH;
 
-    // 1.0 = フォルマント補正最大
+    // 声質補正を最大
     formantNode.formantStrength.value = 1.0;
 
-    // テンポは通常
+    // 再生速度は通常
     sourceNode.playbackRate.value = 1.0;
     formantNode.playbackRate.value = 1.0;
 
@@ -286,9 +298,7 @@ export default function Home() {
         </div>
 
         <div>PITCH +6</div>
-
         <div>FORMANT CORRECTION ON</div>
-
         <div>SPEED 1.00x</div>
       </div>
 
@@ -307,5 +317,78 @@ export default function Home() {
       <textarea
         value={source}
         onChange={(e) =>
-          setSource(e
+          setSource(e.target.value)
+        }
+        placeholder="話しかけるか、ここに入力"
+        style={{
+          width: "100%",
+          minHeight: "140px",
+          padding: "15px",
+          fontSize: "18px",
+          background: "#111",
+          color: "white",
+          boxSizing: "border-box",
+          borderRadius: "8px",
+        }}
+      />
 
+      <div
+        style={{
+          marginTop: "20px",
+          display: "flex",
+          gap: "10px",
+        }}
+      >
+        <button
+          onClick={
+            recording
+              ? stopRecording
+              : startRecording
+          }
+          style={{
+            padding: "20px",
+            flex: 1,
+          }}
+        >
+          {recording
+            ? "STOP"
+            : "● TALK"}
+        </button>
+
+        <button
+          onClick={() => translate()}
+          style={{
+            padding: "20px",
+            flex: 1,
+          }}
+        >
+          TRANSLATE
+        </button>
+      </div>
+
+      <h2>TRANSLATED</h2>
+
+      <div
+        style={{
+          fontSize: "24px",
+          marginBottom: "20px",
+        }}
+      >
+        {translated ||
+          "翻訳結果がここに表示されます"}
+      </div>
+
+      <button
+        onClick={() => speak(translated)}
+        disabled={!translated}
+        style={{
+          padding: "16px 24px",
+          fontSize: "18px",
+          width: "100%",
+        }}
+      >
+        ▶ REPLAY VOICE
+      </button>
+    </main>
+  );
+}
