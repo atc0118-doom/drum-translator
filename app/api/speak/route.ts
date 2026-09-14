@@ -20,34 +20,37 @@ export async function POST(req: Request) {
     const instructions =
       language === "ja"
         ? `
-Speak in Japanese as a bright, cute, intelligent female-presenting fictional navigation AI.
+Speak Japanese clearly and naturally.
 
-Voice direction:
-- Use a clearly feminine presentation.
-- Use a slightly higher vocal register.
-- Sound youthful, cheerful and warm, but not childish.
-- Keep the voice light and energetic.
-- Use crisp pronunciation and clear vowels.
-- Speak at a slightly brisk pace.
-- Add a small amount of playful friendliness.
-- Sentence endings like 「〜だよ」「〜だね」「〜してね」「〜かな」 should sound soft, cute and natural.
-- Avoid a deep, heavy, masculine, stern or announcer-like delivery.
-- Avoid sounding emotionless or robotic.
-- Keep warnings and important information clear and easy to understand.
-- Maintain an original fictional voice.
-- Do not imitate or evoke any specific real actor, voice actor, celebrity, or copyrighted character.
+Use a bright, friendly, cute, feminine-presenting navigator style.
+Use a light, youthful and cheerful delivery.
+Keep the vocal register relatively high and feminine.
+Keep the pace slightly brisk and energetic.
+
+Make sentence endings such as
+「〜だよ」
+「〜だね」
+「〜してね」
+「〜かな」
+sound soft, cute and friendly.
+
+Sound intelligent, confident and lively,
+while keeping a warm and approachable personality.
+
+Avoid a deep, heavy, masculine or announcer-like delivery.
+Do not sound stern or overly formal.
+
+Maintain an original fictional voice.
+Do not imitate any specific real person or copyrighted character.
 `
         : `
-Speak clearly and naturally with a bright, friendly,
-female-presenting synthetic navigator tone.
+Speak clearly and naturally in a bright,
+friendly, feminine-presenting navigator style.
 `;
 
     const audio = await client.audio.speech.create({
-      model: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
-
-      // 女性寄りの声を固定
-      voice: "shimmer",
-
+      model: "gpt-4o-mini-tts",
+      voice: "nova",
       input: text,
       instructions,
       response_format: "mp3",
@@ -64,7 +67,7 @@ female-presenting synthetic navigator tone.
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("TTS ERROR:", error);
 
     return Response.json(
       { error: "Speech generation failed" },
