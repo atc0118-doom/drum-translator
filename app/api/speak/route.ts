@@ -6,14 +6,21 @@ const client = new OpenAI({
 
 export const runtime = "nodejs";
 
-const allowedVoices = ["coral", "shimmer", "nova"];
+const allowedVoices = [
+  "marin",
+  "sage",
+  "fable",
+  "verse",
+  "shimmer",
+  "coral",
+];
 
 export async function POST(req: Request) {
   try {
     const {
       text,
       language = "ja",
-      voice = "coral",
+      voice = "marin",
     } = await req.json();
 
     if (!text?.trim()) {
@@ -25,31 +32,39 @@ export async function POST(req: Request) {
 
     const selectedVoice = allowedVoices.includes(voice)
       ? voice
-      : "coral";
+      : "marin";
 
     const instructions =
       language === "ja"
         ? `
-Speak Japanese clearly and naturally.
+Speak in Japanese using a light, high-pitched, cute fictional female navigator voice.
 
-Use a bright, cute, intelligent female-presenting fictional navigation AI style.
+Use a noticeably higher vocal register.
+Keep the vocal weight light and airy.
+Sound youthful, cheerful, playful, warm, and affectionate, but still clearly adult.
+Use lively pitch variation and expressive intonation.
+Speak slightly faster than normal.
 
-Voice direction:
-- Use a light and relatively high vocal register.
-- Sound youthful and feminine, but not childish.
-- Sound cheerful, clever, lively and warm.
-- Keep pronunciation crisp and easy to understand.
-- Speak slightly briskly.
-- Make endings such as 「〜だよ」「〜だね」「〜してね」「〜かな」 sound soft and cute.
-- Avoid a deep, heavy, masculine, stern or announcer-like delivery.
-- Avoid sounding overly robotic or emotionless.
-- Keep warnings and important facts clear.
-- Maintain an original fictional voice.
-- Do not imitate any specific real person or copyrighted character.
+Make sentence endings such as
+「〜だよ」
+「〜だね」
+「〜してね」
+「〜かな」
+sound sweet, soft, warm, and playful.
+
+Avoid a low register.
+Avoid a heavy chest voice.
+Avoid masculine resonance.
+Avoid a stern or serious announcer tone.
+Avoid flat or monotone delivery.
+
+Keep pronunciation crisp and easy to understand.
+Maintain an original fictional voice.
+Do not imitate any specific real person or copyrighted character.
 `
         : `
-Speak clearly and naturally with a bright,
-friendly, light, feminine-presenting navigator style.
+Speak clearly and naturally with a light,
+bright, friendly, feminine-presenting navigator style.
 `;
 
     const audio = await client.audio.speech.create({
@@ -60,7 +75,9 @@ friendly, light, feminine-presenting navigator style.
       response_format: "mp3",
     });
 
-    const bytes = Buffer.from(await audio.arrayBuffer());
+    const bytes = Buffer.from(
+      await audio.arrayBuffer()
+    );
 
     return new Response(bytes, {
       headers: {
