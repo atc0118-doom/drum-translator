@@ -8,6 +8,8 @@ export default function Home() {
   const [status, setStatus] = useState("READY");
   const [recording, setRecording] = useState(false);
 
+  const [voice, setVoice] = useState("coral");
+
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -26,12 +28,11 @@ export default function Home() {
         body: JSON.stringify({
           text,
           language: "ja",
+          voice,
         }),
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error(errorText);
         throw new Error("speech failed");
       }
 
@@ -82,6 +83,7 @@ export default function Home() {
       }
 
       const result = data.translation || "";
+
       setTranslated(result);
 
       if (result) {
@@ -98,7 +100,9 @@ export default function Home() {
   async function startRecording() {
     try {
       const stream =
-        await navigator.mediaDevices.getUserMedia({ audio: true });
+        await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
 
       const recorder = new MediaRecorder(stream);
 
@@ -121,21 +125,32 @@ export default function Home() {
         stream.getTracks().forEach((track) => track.stop());
 
         const form = new FormData();
-        form.append("audio", blob, "speech.webm");
+
+        form.append(
+          "audio",
+          blob,
+          "speech.webm"
+        );
 
         try {
-          const res = await fetch("/api/transcribe", {
-            method: "POST",
-            body: form,
-          });
+          const res = await fetch(
+            "/api/transcribe",
+            {
+              method: "POST",
+              body: form,
+            }
+          );
 
           const data = await res.json();
 
           if (!res.ok) {
-            throw new Error(data.error || "transcription failed");
+            throw new Error(
+              data.error || "transcription failed"
+            );
           }
 
           const text = data.text || "";
+
           setSource(text);
 
           if (text) {
@@ -150,6 +165,7 @@ export default function Home() {
       };
 
       recorder.start();
+
       setRecording(true);
       setStatus("LISTENING");
     } catch (error) {
@@ -163,13 +179,19 @@ export default function Home() {
     setRecording(false);
   }
 
+  async function testVoice() {
+    await speak(
+      "こんにちは。今日はどうする？ 私に任せてね。大丈夫だよ。"
+    );
+  }
+
   return (
     <main
       style={{
         minHeight: "100vh",
         background: "#05070a",
         color: "white",
-        padding: "30px",
+        padding: "24px",
         fontFamily: "Arial",
       }}
     >
@@ -179,9 +201,54 @@ export default function Home() {
 
       <p>STATUS: {status}</p>
 
+      <div
+        style={{
+          marginTop: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        <p>VOICE SELECT</p>
+
+        <select
+          value={voice}
+          onChange={(e) =>
+            setVoice(e.target.value)
+          }
+          style={{
+            padding: "12px",
+            fontSize: "18px",
+            marginRight: "10px",
+          }}
+        >
+          <option value="coral">
+            FEMALE A - CORAL
+          </option>
+
+          <option value="shimmer">
+            FEMALE B - SHIMMER
+          </option>
+
+          <option value="nova">
+            FEMALE C - NOVA
+          </option>
+        </select>
+
+        <button
+          onClick={testVoice}
+          style={{
+            padding: "12px 18px",
+            fontSize: "16px",
+          }}
+        >
+          ▶ TEST VOICE
+        </button>
+      </div>
+
       <textarea
         value={source}
-        onChange={(e) => setSource(e.target.value)}
+        onChange={(e) =>
+          setSource(e.target.value)
+        }
         placeholder="話しかけるか、ここに入力"
         style={{
           width: "100%",
@@ -195,13 +262,19 @@ export default function Home() {
 
       <div style={{ marginTop: "20px" }}>
         <button
-          onClick={recording ? stopRecording : startRecording}
+          onClick={
+            recording
+              ? stopRecording
+              : startRecording
+          }
           style={{
             padding: "20px",
             marginRight: "10px",
           }}
         >
-          {recording ? "STOP" : "● TALK"}
+          {recording
+            ? "STOP"
+            : "● TALK"}
         </button>
 
         <button
@@ -222,11 +295,14 @@ export default function Home() {
           marginBottom: "20px",
         }}
       >
-        {translated || "翻訳結果がここに表示されます"}
+        {translated ||
+          "翻訳結果がここに表示されます"}
       </div>
 
       <button
-        onClick={() => speak(translated)}
+        onClick={() =>
+          speak(translated)
+        }
         disabled={!translated}
         style={{
           padding: "16px 24px",
