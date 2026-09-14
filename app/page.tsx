@@ -2,21 +2,30 @@
 
 import { useRef, useState } from "react";
 
-const modes = [
+const pitchModes = [
   {
-    id: "bright",
-    label: "A // BRIGHT",
-    desc: "明るく自然",
+    id: "normal",
+    label: "NORMAL",
+    rate: 1.0,
+    desc: "MARIN 原音",
   },
   {
-    id: "snappy",
-    label: "B // SNAPPY",
-    desc: "速め・キレ重視",
+    id: "p2",
+    label: "PITCH +2",
+    rate: 1.12,
+    desc: "少し高め",
   },
   {
-    id: "lively",
-    label: "C // LIVELY",
-    desc: "元気・抑揚強め",
+    id: "p4",
+    label: "PITCH +4",
+    rate: 1.26,
+    desc: "かなり高め",
+  },
+  {
+    id: "p6",
+    label: "PITCH +6",
+    rate: 1.41,
+    desc: "かなり明るい高音",
   },
 ];
 
@@ -25,7 +34,7 @@ export default function Home() {
   const [translated, setTranslated] = useState("");
   const [status, setStatus] = useState("READY");
   const [recording, setRecording] = useState(false);
-  const [mode, setMode] = useState("snappy");
+  const [pitchMode, setPitchMode] = useState("p4");
 
   const recorderRef =
     useRef<MediaRecorder | null>(null);
@@ -36,14 +45,22 @@ export default function Home() {
   const audioRef =
     useRef<HTMLAudioElement | null>(null);
 
+  function getRate(mode: string) {
+    const found = pitchModes.find(
+      (item) => item.id === mode
+    );
+
+    return found?.rate ?? 1.0;
+  }
+
   async function speak(
     text: string,
-    selectedMode = mode
+    selectedPitch = pitchMode
   ) {
     if (!text.trim()) return;
 
     setStatus(
-      `MARIN // ${selectedMode.toUpperCase()}`
+      `MARIN // ${selectedPitch.toUpperCase()}`
     );
 
     try {
@@ -55,13 +72,14 @@ export default function Home() {
         body: JSON.stringify({
           text,
           language: "ja",
-          mode: selectedMode,
+          mode: "snappy",
         }),
       });
 
       if (!res.ok) {
         const errorText = await res.text();
         console.error(errorText);
+
         throw new Error("speech failed");
       }
 
@@ -73,7 +91,26 @@ export default function Home() {
       }
 
       const audio = new Audio(url);
+
       audioRef.current = audio;
+
+      const rate = getRate(selectedPitch);
+
+      audio.playbackRate = rate;
+
+      /*
+        Chrome系で対応している場合、
+        preservePitchをOFFにして
+        再生速度に応じて音程も変化させる。
+      */
+
+      try {
+        (audio as any).preservesPitch = false;
+        (audio as any).mozPreservesPitch = false;
+        (audio as any).webkitPreservesPitch = false;
+      } catch (e) {
+        console.log("Pitch control not supported");
+      }
 
       audio.onended = () => {
         setStatus("READY");
@@ -81,45 +118,40 @@ export default function Home() {
       };
 
       await audio.play();
+
     } catch (error) {
       console.error(error);
       setStatus("VOICE ERROR");
     }
   }
 
-  async function translate(
-    text = source
-  ) {
+  async function translate(text = source) {
     if (!text.trim()) return;
 
     setStatus("TRANSLATING");
 
     try {
-      const res =
-        await fetch("/api/translate", {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            text,
-            sourceLang: "auto",
-            targetLang: "ja",
-          }),
-        });
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          sourceLang: "auto",
+          targetLang: "ja",
+        }),
+      });
 
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(
-          data.error ||
-            "translation failed"
+          data.error || "translation failed"
         );
       }
 
-      const result =
-        data.translation || "";
+      const result = data.translation || "";
 
       setTranslated(result);
 
@@ -128,6 +160,7 @@ export default function Home() {
       } else {
         setStatus("READY");
       }
+
     } catch (error) {
       console.error(error);
       setStatus("TRANSLATE ERROR");
@@ -145,89 +178,81 @@ export default function Home() {
         new MediaRecorder(stream);
 
       chunksRef.current = [];
-      recorderRef.current =
-        recorder;
+      recorderRef.current = recorder;
 
-      recorder.ondataavailable =
-        (e) => {
-          if (e.data.size > 0) {
-            chunksRef.current.push(
-              e.data
-            );
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        setStatus("TRANSCRIBING");
+
+        const blob = new Blob(
+          chunksRef.current,
+          {
+            type:
+              recorder.mimeType ||
+              "audio/webm",
           }
-        };
+        );
 
-      recorder.onstop =
-        async () => {
-          setStatus("TRANSCRIBING");
-
-          const blob =
-            new Blob(
-              chunksRef.current,
-              {
-                type:
-                  recorder.mimeType ||
-                  "audio/webm",
-              }
-            );
-
-          stream
-            .getTracks()
-            .forEach(
-              (track) =>
-                track.stop()
-            );
-
-          const form =
-            new FormData();
-
-          form.append(
-            "audio",
-            blob,
-            "speech.webm"
+        stream
+          .getTracks()
+          .forEach((track) =>
+            track.stop()
           );
 
-          try {
-            const res =
-              await fetch(
-                "/api/transcribe",
-                {
-                  method: "POST",
-                  body: form,
-                }
-              );
+        const form = new FormData();
 
-            const data =
-              await res.json();
+        form.append(
+          "audio",
+          blob,
+          "speech.webm"
+        );
 
-            if (!res.ok) {
-              throw new Error(
-                data.error ||
-                  "transcription failed"
-              );
+        try {
+          const res = await fetch(
+            "/api/transcribe",
+            {
+              method: "POST",
+              body: form,
             }
+          );
 
-            const text =
-              data.text || "";
+          const data = await res.json();
 
-            setSource(text);
-
-            if (text) {
-              await translate(text);
-            } else {
-              setStatus("READY");
-            }
-          } catch (error) {
-            console.error(error);
-            setStatus(
-              "TRANSCRIBE ERROR"
+          if (!res.ok) {
+            throw new Error(
+              data.error ||
+                "transcription failed"
             );
           }
-        };
+
+          const text = data.text || "";
+
+          setSource(text);
+
+          if (text) {
+            await translate(text);
+          } else {
+            setStatus("READY");
+          }
+
+        } catch (error) {
+          console.error(error);
+          setStatus(
+            "TRANSCRIBE ERROR"
+          );
+        }
+      };
 
       recorder.start();
+
       setRecording(true);
       setStatus("LISTENING");
+
     } catch (error) {
       console.error(error);
       setStatus("MIC ERROR");
@@ -239,14 +264,14 @@ export default function Home() {
     setRecording(false);
   }
 
-  async function testMode(
-    selectedMode: string
+  async function testPitch(
+    selectedPitch: string
   ) {
-    setMode(selectedMode);
+    setPitchMode(selectedPitch);
 
     await speak(
       "うん、わかったよ。じゃあ行こっか。大丈夫、私に任せてね。",
-      selectedMode
+      selectedPitch
     );
   }
 
@@ -260,15 +285,13 @@ export default function Home() {
         fontFamily: "Arial",
       }}
     >
-      <p>
-        FIELD TRANSLATION TERMINAL
-      </p>
+      <p>FIELD TRANSLATION TERMINAL</p>
 
-      <h1>DRUM // MARIN TEST</h1>
+      <h1>DRUM // PITCH TEST</h1>
 
       <p>STATUS: {status}</p>
 
-      <h2>VOICE MODE</h2>
+      <h2>MARIN PITCH</h2>
 
       <div
         style={{
@@ -277,23 +300,25 @@ export default function Home() {
           marginBottom: "22px",
         }}
       >
-        {modes.map((item) => (
+        {pitchModes.map((item) => (
           <button
             key={item.id}
             onClick={() =>
-              testMode(item.id)
+              testPitch(item.id)
             }
             style={{
               padding: "18px 14px",
               textAlign: "left",
               borderRadius: "8px",
               color: "white",
+
               background:
-                mode === item.id
+                pitchMode === item.id
                   ? "#292929"
                   : "#111",
+
               border:
-                mode === item.id
+                pitchMode === item.id
                   ? "2px solid white"
                   : "1px solid #555",
             }}
@@ -323,9 +348,14 @@ export default function Home() {
       <p>
         VOICE: <strong>MARIN</strong>
         <br />
-        MODE:{" "}
+        PITCH:{" "}
         <strong>
-          {mode.toUpperCase()}
+          {
+            pitchModes.find(
+              (x) =>
+                x.id === pitchMode
+            )?.label
+          }
         </strong>
       </p>
 
@@ -334,8 +364,7 @@ export default function Home() {
         onChange={(e) =>
           setSource(e.target.value)
         }
-        placeholder=
-          "話しかけるか、ここに入力"
+        placeholder="話しかけるか、ここに入力"
         style={{
           width: "100%",
           minHeight: "140px",
@@ -372,9 +401,7 @@ export default function Home() {
         </button>
 
         <button
-          onClick={() =>
-            translate()
-          }
+          onClick={() => translate()}
           style={{
             padding: "20px",
             flex: 1,
