@@ -2,13 +2,19 @@
 
 import { useRef, useState } from "react";
 
-const voices = [
-  { id: "marin", label: "MARIN" },
-  { id: "sage", label: "SAGE" },
-  { id: "fable", label: "FABLE" },
-  { id: "verse", label: "VERSE" },
-  { id: "shimmer", label: "SHIMMER" },
-  { id: "coral", label: "CORAL" },
+const voiceStyles = [
+  {
+    id: "high",
+    label: "MARIN HIGH",
+  },
+  {
+    id: "cute",
+    label: "MARIN CUTE",
+  },
+  {
+    id: "ultra",
+    label: "MARIN ULTRA CUTE",
+  },
 ];
 
 export default function Home() {
@@ -16,85 +22,120 @@ export default function Home() {
   const [translated, setTranslated] = useState("");
   const [status, setStatus] = useState("READY");
   const [recording, setRecording] = useState(false);
-  const [voice, setVoice] = useState("marin");
 
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [voiceStyle, setVoiceStyle] =
+    useState("cute");
 
-  async function speak(text: string, selectedVoice = voice) {
+  const recorderRef =
+    useRef<MediaRecorder | null>(null);
+
+  const chunksRef =
+    useRef<Blob[]>([]);
+
+  const audioRef =
+    useRef<HTMLAudioElement | null>(null);
+
+  async function speak(
+    text: string,
+    selectedStyle = voiceStyle
+  ) {
     if (!text.trim()) return;
 
-    setStatus(`SPEAKING // ${selectedVoice.toUpperCase()}`);
+    setStatus(
+      `SPEAKING // ${selectedStyle.toUpperCase()}`
+    );
 
     try {
       const res = await fetch("/api/speak", {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify({
           text,
           language: "ja",
-          voice: selectedVoice,
+          style: selectedStyle,
         }),
       });
 
       if (!res.ok) {
         const errorText = await res.text();
+
         console.error(errorText);
+
         throw new Error("speech failed");
       }
 
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+
+      const url =
+        URL.createObjectURL(blob);
 
       if (audioRef.current) {
         audioRef.current.pause();
       }
 
-      const audio = new Audio(url);
+      const audio =
+        new Audio(url);
+
       audioRef.current = audio;
 
       audio.onended = () => {
         setStatus("READY");
+
         URL.revokeObjectURL(url);
       };
 
       await audio.play();
+
     } catch (error) {
       console.error(error);
+
       setStatus("VOICE ERROR");
     }
   }
 
-  async function translate(text = source) {
+  async function translate(
+    text = source
+  ) {
     if (!text.trim()) return;
 
     setStatus("TRANSLATING");
 
     try {
-      const res = await fetch("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          sourceLang: "auto",
-          targetLang: "ja",
-        }),
-      });
+      const res = await fetch(
+        "/api/translate",
+        {
+          method: "POST",
 
-      const data = await res.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            text,
+            sourceLang: "auto",
+            targetLang: "ja",
+          }),
+        }
+      );
+
+      const data =
+        await res.json();
 
       if (!res.ok) {
         throw new Error(
-          data.error || "translation failed"
+          data.error ||
+            "translation failed"
         );
       }
 
-      const result = data.translation || "";
+      const result =
+        data.translation || "";
+
       setTranslated(result);
 
       if (result) {
@@ -102,100 +143,141 @@ export default function Home() {
       } else {
         setStatus("READY");
       }
+
     } catch (error) {
       console.error(error);
-      setStatus("TRANSLATE ERROR");
+
+      setStatus(
+        "TRANSLATE ERROR"
+      );
     }
   }
 
   async function startRecording() {
     try {
       const stream =
-        await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
+        await navigator.mediaDevices
+          .getUserMedia({
+            audio: true,
+          });
 
-      const recorder = new MediaRecorder(stream);
+      const recorder =
+        new MediaRecorder(stream);
 
       chunksRef.current = [];
-      recorderRef.current = recorder;
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
+      recorderRef.current =
+        recorder;
 
-      recorder.onstop = async () => {
-        setStatus("TRANSCRIBING");
-
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-
-        stream.getTracks().forEach((track) =>
-          track.stop()
-        );
-
-        const form = new FormData();
-
-        form.append(
-          "audio",
-          blob,
-          "speech.webm"
-        );
-
-        try {
-          const res = await fetch(
-            "/api/transcribe",
-            {
-              method: "POST",
-              body: form,
-            }
-          );
-
-          const data = await res.json();
-
-          if (!res.ok) {
-            throw new Error(
-              data.error || "transcription failed"
+      recorder.ondataavailable =
+        (e) => {
+          if (e.data.size > 0) {
+            chunksRef.current.push(
+              e.data
             );
           }
+        };
 
-          const text = data.text || "";
-          setSource(text);
+      recorder.onstop =
+        async () => {
 
-          if (text) {
-            await translate(text);
-          } else {
-            setStatus("READY");
+          setStatus(
+            "TRANSCRIBING"
+          );
+
+          const blob =
+            new Blob(
+              chunksRef.current,
+              {
+                type:
+                  recorder.mimeType ||
+                  "audio/webm",
+              }
+            );
+
+          stream
+            .getTracks()
+            .forEach(
+              (track) =>
+                track.stop()
+            );
+
+          const form =
+            new FormData();
+
+          form.append(
+            "audio",
+            blob,
+            "speech.webm"
+          );
+
+          try {
+            const res =
+              await fetch(
+                "/api/transcribe",
+                {
+                  method: "POST",
+                  body: form,
+                }
+              );
+
+            const data =
+              await res.json();
+
+            if (!res.ok) {
+              throw new Error(
+                data.error ||
+                  "transcription failed"
+              );
+            }
+
+            const text =
+              data.text || "";
+
+            setSource(text);
+
+            if (text) {
+              await translate(text);
+            } else {
+              setStatus("READY");
+            }
+
+          } catch (error) {
+            console.error(error);
+
+            setStatus(
+              "TRANSCRIBE ERROR"
+            );
           }
-        } catch (error) {
-          console.error(error);
-          setStatus("TRANSCRIBE ERROR");
-        }
-      };
+        };
 
       recorder.start();
+
       setRecording(true);
+
       setStatus("LISTENING");
+
     } catch (error) {
       console.error(error);
+
       setStatus("MIC ERROR");
     }
   }
 
   function stopRecording() {
     recorderRef.current?.stop();
+
     setRecording(false);
   }
 
-  async function testVoice(selectedVoice: string) {
-    setVoice(selectedVoice);
+  async function testStyle(
+    style: string
+  ) {
+    setVoiceStyle(style);
 
     await speak(
-      "こんにちは。今日はどうする？ 私に任せてね。大丈夫だよ。",
-      selectedVoice
+      "こんにちは。今日はどうする？ 私に任せてね。大丈夫だよ。一緒に行こっか。",
+      style
     );
   }
 
@@ -209,63 +291,94 @@ export default function Home() {
         fontFamily: "Arial",
       }}
     >
-      <p>FIELD TRANSLATION TERMINAL</p>
+      <p>
+        FIELD TRANSLATION TERMINAL
+      </p>
 
-      <h1>DRUM // VOICE</h1>
+      <h1>
+        DRUM // VOICE
+      </h1>
 
-      <p>STATUS: {status}</p>
+      <p>
+        STATUS: {status}
+      </p>
 
-      <h2>VOICE TEST</h2>
+      <h2>
+        MARIN VOICE TEST
+      </h2>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            "repeat(2, minmax(0, 1fr))",
           gap: "10px",
-          marginBottom: "25px",
+          marginBottom: "20px",
         }}
       >
-        {voices.map((item) => (
-          <button
-            key={item.id}
-            onClick={() =>
-              testVoice(item.id)
-            }
-            style={{
-              padding: "16px 10px",
-              fontSize: "16px",
-              fontWeight: "bold",
-              border:
-                voice === item.id
-                  ? "2px solid white"
-                  : "1px solid #555",
-              background:
-                voice === item.id
-                  ? "#252525"
-                  : "#111",
-              color: "white",
-              borderRadius: "8px",
-            }}
-          >
-            ▶ {item.label}
-          </button>
-        ))}
+        {voiceStyles.map(
+          (item) => (
+            <button
+              key={item.id}
+
+              onClick={() =>
+                testStyle(
+                  item.id
+                )
+              }
+
+              style={{
+                padding:
+                  "17px 12px",
+
+                fontSize:
+                  "16px",
+
+                fontWeight:
+                  "bold",
+
+                border:
+                  voiceStyle ===
+                  item.id
+                    ? "2px solid white"
+                    : "1px solid #555",
+
+                background:
+                  voiceStyle ===
+                  item.id
+                    ? "#292929"
+                    : "#111",
+
+                color: "white",
+
+                borderRadius:
+                  "8px",
+              }}
+            >
+              ▶ {item.label}
+            </button>
+          )
+        )}
       </div>
 
       <p>
-        SELECTED VOICE:{" "}
+        SELECTED:{" "}
         <strong>
-          {voice.toUpperCase()}
+          MARIN{" "}
+          {voiceStyle.toUpperCase()}
         </strong>
       </p>
 
       <textarea
         value={source}
+
         onChange={(e) =>
-          setSource(e.target.value)
+          setSource(
+            e.target.value
+          )
         }
-        placeholder="話しかけるか、ここに入力"
+
+        placeholder=
+          "話しかけるか、ここに入力"
+
         style={{
           width: "100%",
           minHeight: "140px",
@@ -273,7 +386,8 @@ export default function Home() {
           fontSize: "18px",
           background: "#111",
           color: "white",
-          boxSizing: "border-box",
+          boxSizing:
+            "border-box",
         }}
       />
 
@@ -290,6 +404,7 @@ export default function Home() {
               ? stopRecording
               : startRecording
           }
+
           style={{
             padding: "20px",
             flex: 1,
@@ -301,7 +416,10 @@ export default function Home() {
         </button>
 
         <button
-          onClick={() => translate()}
+          onClick={() =>
+            translate()
+          }
+
           style={{
             padding: "20px",
             flex: 1,
@@ -311,7 +429,9 @@ export default function Home() {
         </button>
       </div>
 
-      <h2>TRANSLATED</h2>
+      <h2>
+        TRANSLATED
+      </h2>
 
       <div
         style={{
@@ -327,9 +447,12 @@ export default function Home() {
         onClick={() =>
           speak(translated)
         }
+
         disabled={!translated}
+
         style={{
-          padding: "16px 24px",
+          padding:
+            "16px 24px",
           fontSize: "18px",
           width: "100%",
         }}
