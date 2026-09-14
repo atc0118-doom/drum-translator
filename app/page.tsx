@@ -2,19 +2,13 @@
 
 import { useRef, useState } from "react";
 
-const voiceStyles = [
-  {
-    id: "high",
-    label: "MARIN HIGH",
-  },
-  {
-    id: "cute",
-    label: "MARIN CUTE",
-  },
-  {
-    id: "ultra",
-    label: "MARIN ULTRA CUTE",
-  },
+const voices = [
+  { id: "marin", label: "MARIN" },
+  { id: "shimmer", label: "SHIMMER" },
+  { id: "coral", label: "CORAL" },
+  { id: "sage", label: "SAGE" },
+  { id: "fable", label: "FABLE" },
+  { id: "verse", label: "VERSE" },
 ];
 
 export default function Home() {
@@ -22,9 +16,7 @@ export default function Home() {
   const [translated, setTranslated] = useState("");
   const [status, setStatus] = useState("READY");
   const [recording, setRecording] = useState(false);
-
-  const [voiceStyle, setVoiceStyle] =
-    useState("cute");
+  const [voice, setVoice] = useState("marin");
 
   const recorderRef =
     useRef<MediaRecorder | null>(null);
@@ -37,12 +29,12 @@ export default function Home() {
 
   async function speak(
     text: string,
-    selectedStyle = voiceStyle
+    selectedVoice = voice
   ) {
     if (!text.trim()) return;
 
     setStatus(
-      `SPEAKING // ${selectedStyle.toUpperCase()}`
+      `VOICE // ${selectedVoice.toUpperCase()}`
     );
 
     try {
@@ -56,19 +48,23 @@ export default function Home() {
         body: JSON.stringify({
           text,
           language: "ja",
-          style: selectedStyle,
+          voice: selectedVoice,
         }),
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
+        const errorText =
+          await res.text();
 
         console.error(errorText);
 
-        throw new Error("speech failed");
+        throw new Error(
+          "speech failed"
+        );
       }
 
-      const blob = await res.blob();
+      const blob =
+        await res.blob();
 
       const url =
         URL.createObjectURL(blob);
@@ -89,7 +85,6 @@ export default function Home() {
       };
 
       await audio.play();
-
     } catch (error) {
       console.error(error);
 
@@ -105,23 +100,24 @@ export default function Home() {
     setStatus("TRANSLATING");
 
     try {
-      const res = await fetch(
-        "/api/translate",
-        {
-          method: "POST",
+      const res =
+        await fetch(
+          "/api/translate",
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify({
-            text,
-            sourceLang: "auto",
-            targetLang: "ja",
-          }),
-        }
-      );
+            body: JSON.stringify({
+              text,
+              sourceLang: "auto",
+              targetLang: "ja",
+            }),
+          }
+        );
 
       const data =
         await res.json();
@@ -143,7 +139,6 @@ export default function Home() {
       } else {
         setStatus("READY");
       }
-
     } catch (error) {
       console.error(error);
 
@@ -156,16 +151,14 @@ export default function Home() {
   async function startRecording() {
     try {
       const stream =
-        await navigator.mediaDevices
-          .getUserMedia({
-            audio: true,
-          });
+        await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
 
       const recorder =
         new MediaRecorder(stream);
 
       chunksRef.current = [];
-
       recorderRef.current =
         recorder;
 
@@ -180,7 +173,6 @@ export default function Home() {
 
       recorder.onstop =
         async () => {
-
           setStatus(
             "TRANSCRIBING"
           );
@@ -241,7 +233,6 @@ export default function Home() {
             } else {
               setStatus("READY");
             }
-
           } catch (error) {
             console.error(error);
 
@@ -256,7 +247,6 @@ export default function Home() {
       setRecording(true);
 
       setStatus("LISTENING");
-
     } catch (error) {
       console.error(error);
 
@@ -270,14 +260,14 @@ export default function Home() {
     setRecording(false);
   }
 
-  async function testStyle(
-    style: string
+  async function testVoice(
+    selectedVoice: string
   ) {
-    setVoiceStyle(style);
+    setVoice(selectedVoice);
 
     await speak(
-      "こんにちは。今日はどうする？ 私に任せてね。大丈夫だよ。一緒に行こっか。",
-      style
+      "うん、わかったよ。じゃあ行こっか。大丈夫、私に任せてね。",
+      selectedVoice
     );
   }
 
@@ -296,7 +286,7 @@ export default function Home() {
       </p>
 
       <h1>
-        DRUM // VOICE
+        DRUM // VOICE V2
       </h1>
 
       <p>
@@ -304,66 +294,63 @@ export default function Home() {
       </p>
 
       <h2>
-        MARIN VOICE TEST
+        VOICE TEST
       </h2>
+
+      <p
+        style={{
+          opacity: 0.7,
+          fontSize: "14px",
+        }}
+      >
+        BRIGHT / LIGHT / QUICK /
+        LIVELY
+      </p>
 
       <div
         style={{
           display: "grid",
+          gridTemplateColumns:
+            "repeat(2, minmax(0, 1fr))",
           gap: "10px",
+          marginTop: "15px",
           marginBottom: "20px",
         }}
       >
-        {voiceStyles.map(
-          (item) => (
-            <button
-              key={item.id}
+        {voices.map((item) => (
+          <button
+            key={item.id}
+            onClick={() =>
+              testVoice(item.id)
+            }
+            style={{
+              padding: "18px 8px",
+              fontSize: "15px",
+              fontWeight: "bold",
 
-              onClick={() =>
-                testStyle(
-                  item.id
-                )
-              }
+              border:
+                voice === item.id
+                  ? "2px solid white"
+                  : "1px solid #555",
 
-              style={{
-                padding:
-                  "17px 12px",
+              background:
+                voice === item.id
+                  ? "#292929"
+                  : "#111",
 
-                fontSize:
-                  "16px",
-
-                fontWeight:
-                  "bold",
-
-                border:
-                  voiceStyle ===
-                  item.id
-                    ? "2px solid white"
-                    : "1px solid #555",
-
-                background:
-                  voiceStyle ===
-                  item.id
-                    ? "#292929"
-                    : "#111",
-
-                color: "white",
-
-                borderRadius:
-                  "8px",
-              }}
-            >
-              ▶ {item.label}
-            </button>
-          )
-        )}
+              color: "white",
+              borderRadius: "8px",
+            }}
+          >
+            ▶ {item.label}
+          </button>
+        ))}
       </div>
 
       <p>
-        SELECTED:{" "}
+        SELECTED VOICE:{" "}
         <strong>
-          MARIN{" "}
-          {voiceStyle.toUpperCase()}
+          {voice.toUpperCase()}
         </strong>
       </p>
 
@@ -386,8 +373,11 @@ export default function Home() {
           fontSize: "18px",
           background: "#111",
           color: "white",
+
           boxSizing:
             "border-box",
+
+          borderRadius: "8px",
         }}
       />
 
@@ -404,7 +394,6 @@ export default function Home() {
               ? stopRecording
               : startRecording
           }
-
           style={{
             padding: "20px",
             flex: 1,
@@ -419,7 +408,6 @@ export default function Home() {
           onClick={() =>
             translate()
           }
-
           style={{
             padding: "20px",
             flex: 1,
