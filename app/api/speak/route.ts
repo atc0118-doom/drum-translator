@@ -20,42 +20,28 @@ export async function POST(req: Request) {
     const instructions =
       language === "ja"
         ? `
-Speak in Japanese as a bright, cute, intelligent female-presenting fictional navigation AI.
+Speak Japanese clearly and naturally.
 
-Voice direction:
-- Use a clearly feminine presentation.
-- Use a slightly higher vocal register.
-- Sound youthful, cheerful and warm, but not childish.
-- Keep the voice light and energetic.
-- Use crisp pronunciation and clear vowels.
-- Speak at a slightly brisk pace.
-- Add a small amount of playful friendliness.
-- Sentence endings like 「〜だよ」「〜だね」「〜してね」「〜かな」 should sound soft, cute and natural.
-- Avoid a deep, heavy, masculine, stern or announcer-like delivery.
-- Avoid sounding emotionless or robotic.
-- Keep warnings and important information clear and easy to understand.
-- Maintain an original fictional voice.
-- Do not imitate or evoke any specific real actor, voice actor, celebrity, or copyrighted character.
+Use a bright, friendly, cute, feminine-presenting navigator style.
+Use a light and cheerful delivery.
+Keep the pace slightly brisk.
+Make endings such as 「〜だよ」「〜だね」「〜してね」 sound soft and friendly.
+Do not sound stern, heavy, or announcer-like.
+Do not imitate any specific real person or copyrighted character.
 `
         : `
-Speak clearly and naturally with a bright, friendly,
-female-presenting synthetic navigator tone.
+Speak clearly and naturally in a friendly navigator style.
 `;
 
     const audio = await client.audio.speech.create({
-      model: process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts",
-
-      // 女性寄りの声を固定
-      voice: "shimmer",
-
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
       input: text,
       instructions,
       response_format: "mp3",
     });
 
-    const bytes = Buffer.from(
-      await audio.arrayBuffer()
-    );
+    const bytes = Buffer.from(await audio.arrayBuffer());
 
     return new Response(bytes, {
       headers: {
@@ -64,7 +50,7 @@ female-presenting synthetic navigator tone.
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("TTS ERROR:", error);
 
     return Response.json(
       { error: "Speech generation failed" },
