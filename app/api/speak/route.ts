@@ -6,12 +6,21 @@ const client = new OpenAI({
 
 export const runtime = "nodejs";
 
+const allowedVoices = [
+  "marin",
+  "shimmer",
+  "coral",
+  "sage",
+  "fable",
+  "verse",
+];
+
 export async function POST(req: Request) {
   try {
     const {
       text,
       language = "ja",
-      style = "cute",
+      voice = "marin",
     } = await req.json();
 
     if (!text?.trim()) {
@@ -21,105 +30,74 @@ export async function POST(req: Request) {
       );
     }
 
-    let instructions = "";
+    const selectedVoice = allowedVoices.includes(voice)
+      ? voice
+      : "marin";
 
-    if (language === "ja") {
-      if (style === "high") {
-        instructions = `
-Speak Japanese using a bright, clearly feminine-presenting fictional navigator voice.
+    const instructions =
+      language === "ja"
+        ? `
+Speak Japanese as an original fictional handheld translation-device navigator.
 
-Use a noticeably higher vocal register than normal.
-Keep the voice light and clear.
-Use lively pitch variation.
-Speak slightly faster than normal.
+The voice should be:
+- bright
+- light
+- lively
+- energetic
+- friendly
+- feminine-presenting
+- clearly adult
 
-Avoid low notes.
-Avoid deep resonance.
-Avoid a heavy chest voice.
-Avoid a masculine or announcer-like delivery.
+IMPORTANT:
+Do not simply try to sound extremely high-pitched.
 
-Sound intelligent, cheerful and energetic.
-Keep pronunciation crisp and easy to understand.
+Instead:
+- Use bright forward resonance.
+- Keep the vocal weight light.
+- Use crisp articulation.
+- Speak at a brisk conversational tempo.
+- Give short phrases a quick, punchy rhythm.
+- Use clear and lively pitch movement.
+- Let sentence endings lift slightly when natural.
+- Sound cheerful and immediately responsive.
+- Make the delivery feel compact and snappy, like a smart portable navigator.
 
-Maintain an original fictional voice.
-Do not imitate any specific real person or copyrighted character.
-`;
-      } else if (style === "ultra") {
-        instructions = `
-Speak Japanese using a very bright, high-register, cute,
-female-presenting fictional navigation AI voice.
-
-Use the highest comfortable natural vocal register.
-Keep the vocal weight extremely light.
-Use a light head-voice quality rather than heavy chest resonance.
-
-Sound youthful, cheerful, playful, energetic and sweet,
-while still sounding clearly adult.
-
-Use expressive, lively pitch movement.
-Use a slightly fast and bouncy speaking rhythm.
-
-Make endings such as
+For endings such as:
 「〜だよ」
 「〜だね」
 「〜してね」
 「〜かな」
-sound especially soft, sweet, playful and affectionate.
+「〜だって」
+「〜みたい」
 
-Avoid low-pitched delivery.
-Avoid deep resonance.
-Avoid a heavy or mature voice.
-Avoid masculine resonance.
-Avoid an announcer-like tone.
-Avoid flat or robotic intonation.
+make them sound friendly, playful and slightly bouncy.
 
-Do not force an unnatural falsetto.
-Keep Japanese pronunciation crisp and intelligible.
+Avoid:
+- deep resonance
+- slow delivery
+- breathy whispering
+- heavy mature delivery
+- serious announcer delivery
+- flat robotic monotone
+- overly sweet baby-like speech
+- exaggerated anime catchphrases
 
-Maintain an original fictional voice.
-Do not imitate any specific real person or copyrighted character.
-`;
-      } else {
-        instructions = `
-Speak Japanese using a light, high-register, cute,
-female-presenting fictional navigator voice.
-
-Sound youthful, cheerful, warm and playful,
-while still clearly adult.
-
-Use a higher vocal register.
-Keep the voice light and airy.
-Use lively, expressive intonation.
-Speak slightly faster than normal.
-
-Make endings such as
-「〜だよ」
-「〜だね」
-「〜してね」
-「〜かな」
-sound cute, gentle and friendly.
-
-Avoid a low register.
-Avoid heavy chest resonance.
-Avoid masculine or stern delivery.
-Avoid an announcer-like tone.
-
-Keep pronunciation crisp and easy to understand.
+Keep consonants crisp.
+Keep vowels clear.
+Prioritize intelligibility.
+Use natural contemporary spoken Japanese.
 
 Maintain an original fictional voice.
-Do not imitate any specific real person or copyrighted character.
-`;
-      }
-    } else {
-      instructions = `
+Do not imitate or reproduce the recognizable voice or mannerisms of any specific real person, actor, voice actor, celebrity, or copyrighted character.
+`
+        : `
 Speak clearly and naturally with a bright,
-light and friendly feminine-presenting navigator style.
+light, brisk and friendly fictional navigator voice.
 `;
-    }
 
     const audio = await client.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice: "marin",
+      voice: selectedVoice as any,
       input: text,
       instructions,
       response_format: "mp3",
