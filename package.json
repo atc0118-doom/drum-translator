@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+ "@soundtouchjs/formant-correction-worklet": "^2.1.1",
     "next": "^15.5.0",
     "openai": "^5.20.0",
     "react": "^19.1.0",
