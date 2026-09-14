@@ -6,21 +6,12 @@ const client = new OpenAI({
 
 export const runtime = "nodejs";
 
-const allowedVoices = [
-  "marin",
-  "sage",
-  "fable",
-  "verse",
-  "shimmer",
-  "coral",
-];
-
 export async function POST(req: Request) {
   try {
     const {
       text,
       language = "ja",
-      voice = "marin",
+      style = "cute",
     } = await req.json();
 
     if (!text?.trim()) {
@@ -30,46 +21,105 @@ export async function POST(req: Request) {
       );
     }
 
-    const selectedVoice = allowedVoices.includes(voice)
-      ? voice
-      : "marin";
+    let instructions = "";
 
-    const instructions =
-      language === "ja"
-        ? `
-Speak in Japanese using a light, high-pitched, cute fictional female navigator voice.
+    if (language === "ja") {
+      if (style === "high") {
+        instructions = `
+Speak Japanese using a bright, clearly feminine-presenting fictional navigator voice.
 
-Use a noticeably higher vocal register.
-Keep the vocal weight light and airy.
-Sound youthful, cheerful, playful, warm, and affectionate, but still clearly adult.
-Use lively pitch variation and expressive intonation.
+Use a noticeably higher vocal register than normal.
+Keep the voice light and clear.
+Use lively pitch variation.
 Speak slightly faster than normal.
 
-Make sentence endings such as
+Avoid low notes.
+Avoid deep resonance.
+Avoid a heavy chest voice.
+Avoid a masculine or announcer-like delivery.
+
+Sound intelligent, cheerful and energetic.
+Keep pronunciation crisp and easy to understand.
+
+Maintain an original fictional voice.
+Do not imitate any specific real person or copyrighted character.
+`;
+      } else if (style === "ultra") {
+        instructions = `
+Speak Japanese using a very bright, high-register, cute,
+female-presenting fictional navigation AI voice.
+
+Use the highest comfortable natural vocal register.
+Keep the vocal weight extremely light.
+Use a light head-voice quality rather than heavy chest resonance.
+
+Sound youthful, cheerful, playful, energetic and sweet,
+while still sounding clearly adult.
+
+Use expressive, lively pitch movement.
+Use a slightly fast and bouncy speaking rhythm.
+
+Make endings such as
 「〜だよ」
 「〜だね」
 「〜してね」
 「〜かな」
-sound sweet, soft, warm, and playful.
+sound especially soft, sweet, playful and affectionate.
 
-Avoid a low register.
-Avoid a heavy chest voice.
+Avoid low-pitched delivery.
+Avoid deep resonance.
+Avoid a heavy or mature voice.
 Avoid masculine resonance.
-Avoid a stern or serious announcer tone.
-Avoid flat or monotone delivery.
+Avoid an announcer-like tone.
+Avoid flat or robotic intonation.
 
-Keep pronunciation crisp and easy to understand.
+Do not force an unnatural falsetto.
+Keep Japanese pronunciation crisp and intelligible.
+
 Maintain an original fictional voice.
 Do not imitate any specific real person or copyrighted character.
-`
-        : `
-Speak clearly and naturally with a light,
-bright, friendly, feminine-presenting navigator style.
 `;
+      } else {
+        instructions = `
+Speak Japanese using a light, high-register, cute,
+female-presenting fictional navigator voice.
+
+Sound youthful, cheerful, warm and playful,
+while still clearly adult.
+
+Use a higher vocal register.
+Keep the voice light and airy.
+Use lively, expressive intonation.
+Speak slightly faster than normal.
+
+Make endings such as
+「〜だよ」
+「〜だね」
+「〜してね」
+「〜かな」
+sound cute, gentle and friendly.
+
+Avoid a low register.
+Avoid heavy chest resonance.
+Avoid masculine or stern delivery.
+Avoid an announcer-like tone.
+
+Keep pronunciation crisp and easy to understand.
+
+Maintain an original fictional voice.
+Do not imitate any specific real person or copyrighted character.
+`;
+      }
+    } else {
+      instructions = `
+Speak clearly and naturally with a bright,
+light and friendly feminine-presenting navigator style.
+`;
+    }
 
     const audio = await client.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice: selectedVoice as any,
+      voice: "marin",
       input: text,
       instructions,
       response_format: "mp3",
