@@ -6,9 +6,15 @@ const client = new OpenAI({
 
 export const runtime = "nodejs";
 
+const allowedVoices = ["coral", "shimmer", "nova"];
+
 export async function POST(req: Request) {
   try {
-    const { text, language = "ja" } = await req.json();
+    const {
+      text,
+      language = "ja",
+      voice = "coral",
+    } = await req.json();
 
     if (!text?.trim()) {
       return Response.json(
@@ -17,48 +23,44 @@ export async function POST(req: Request) {
       );
     }
 
+    const selectedVoice = allowedVoices.includes(voice)
+      ? voice
+      : "coral";
+
     const instructions =
       language === "ja"
         ? `
 Speak Japanese clearly and naturally.
 
-Use a bright, friendly, cute, feminine-presenting navigator style.
-Use a light, youthful and cheerful delivery.
-Keep the vocal register relatively high and feminine.
-Keep the pace slightly brisk and energetic.
+Use a bright, cute, intelligent female-presenting fictional navigation AI style.
 
-Make sentence endings such as
-「〜だよ」
-「〜だね」
-「〜してね」
-「〜かな」
-sound soft, cute and friendly.
-
-Sound intelligent, confident and lively,
-while keeping a warm and approachable personality.
-
-Avoid a deep, heavy, masculine or announcer-like delivery.
-Do not sound stern or overly formal.
-
-Maintain an original fictional voice.
-Do not imitate any specific real person or copyrighted character.
+Voice direction:
+- Use a light and relatively high vocal register.
+- Sound youthful and feminine, but not childish.
+- Sound cheerful, clever, lively and warm.
+- Keep pronunciation crisp and easy to understand.
+- Speak slightly briskly.
+- Make endings such as 「〜だよ」「〜だね」「〜してね」「〜かな」 sound soft and cute.
+- Avoid a deep, heavy, masculine, stern or announcer-like delivery.
+- Avoid sounding overly robotic or emotionless.
+- Keep warnings and important facts clear.
+- Maintain an original fictional voice.
+- Do not imitate any specific real person or copyrighted character.
 `
         : `
-Speak clearly and naturally in a bright,
-friendly, feminine-presenting navigator style.
+Speak clearly and naturally with a bright,
+friendly, light, feminine-presenting navigator style.
 `;
 
     const audio = await client.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice: "nova",
+      voice: selectedVoice as any,
       input: text,
       instructions,
       response_format: "mp3",
     });
 
-    const bytes = Buffer.from(
-      await audio.arrayBuffer()
-    );
+    const bytes = Buffer.from(await audio.arrayBuffer());
 
     return new Response(bytes, {
       headers: {
