@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FormantCorrectionNode } from "@soundtouchjs/formant-correction-worklet";
 
 export default function Home() {
   const [source, setSource] = useState("");
@@ -10,339 +11,85 @@ export default function Home() {
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  /*
-    +6 semitones
-    2^(6/12) = 約1.414
-  */
-  const PITCH_SEMITONES = 6;
+  const PITCH = 6;
 
-  function hannWindow(x: number) {
-    return 0.5 - 0.5 * Math.cos(2 * Math.PI * x);
-  }
-
-  /*
-    簡易グラニュラー・ピッチシフト
-
-    再生速度を単純に上げるのではなく、
-    短い音声断片を重ねてピッチを変更する。
-
-    これにより、
-    +6半音の高さを保ちながら
-    全体の長さをほぼ維持する。
-  */
-  async function pitchShift(
-    blob: Blob,
-    semitones: number
-  ): Promise<Blob> {
+  async function playShiftedVoice(blob: Blob) {
     setStatus("PITCH PROCESSING");
 
     const arrayBuffer = await blob.arrayBuffer();
 
-    const audioContext = new AudioContext();
+    const audioContext =
+      new AudioContext();
+
+    audioContextRef.current =
+      audioContext;
+
+    await FormantCorrectionNode.register(
+      audioContext,
+      "/formant-correction-processor.js"
+    );
 
     const decoded =
       await audioContext.decodeAudioData(
         arrayBuffer.slice(0)
       );
 
-    const sampleRate = decoded.sampleRate;
-    const channels = decoded.numberOfChannels;
-    const length = decoded.length;
+    const sourceNode =
+      audioContext.createBufferSource();
 
-    const ratio = Math.pow(
-      2,
-      semitones / 12
-    );
+    sourceNode.buffer = decoded;
+
+    const formantNode =
+      new FormantCorrectionNode({
+        context: audioContext,
+      });
 
     /*
-      40ms程度のgrain
-      10msごとに重ねる
+      +6半音
     */
-    const grainSize = Math.floor(
-      sampleRate * 0.04
+    formantNode.pitchSemitones.value =
+      PITCH;
+
+    /*
+      元の声質をなるべく維持
+      1.0 = 最大補正
+    */
+    formantNode.formantStrength.value =
+      1.0;
+
+    /*
+      再生速度は通常
+    */
+    sourceNode.playbackRate.value =
+      1.0;
+
+    formantNode.playbackRate.value =
+      1.0;
+
+    sourceNode.connect(
+      formantNode
     );
 
-    const hopSize = Math.floor(
-      grainSize / 4
+    formantNode.connect(
+      audioContext.destination
     );
 
-    const output =
-      audioContext.createBuffer(
-        channels,
-        length,
-        sampleRate
-      );
+    sourceNode.onended =
+      async () => {
+        setStatus("READY");
 
-    for (
-      let channel = 0;
-      channel < channels;
-      channel++
-    ) {
-      const input =
-        decoded.getChannelData(channel);
+        try {
+          await audioContext.close();
+        } catch {}
+      };
 
-      const out =
-        output.getChannelData(channel);
-
-      const weights =
-        new Float32Array(length);
-
-      for (
-        let grainStart = 0;
-        grainStart < length;
-        grainStart += hopSize
-      ) {
-        for (
-          let i = 0;
-          i < grainSize;
-          i++
-        ) {
-          const outputIndex =
-            grainStart + i;
-
-          if (
-            outputIndex >= length
-          ) {
-            break;
-          }
-
-          /*
-            grain内部だけを
-            ratio倍の速度で読む
-          */
-          const sourcePosition =
-            grainStart +
-            i * ratio;
-
-          if (
-            sourcePosition >=
-            length - 1
-          ) {
-            break;
-          }
-
-          const index0 =
-            Math.floor(sourcePosition);
-
-          const index1 =
-            Math.min(
-              index0 + 1,
-              length - 1
-            );
-
-          const fraction =
-            sourcePosition - index0;
-
-          /*
-            線形補間
-          */
-          const sample =
-            input[index0] *
-              (1 - fraction) +
-            input[index1] *
-              fraction;
-
-          const window =
-            hannWindow(
-              i / grainSize
-            );
-
-          out[outputIndex] +=
-            sample * window;
-
-          weights[outputIndex] +=
-            window;
-        }
-      }
-
-      /*
-        重なったgrainを正規化
-      */
-      for (
-        let i = 0;
-        i < length;
-        i++
-      ) {
-        if (weights[i] > 0) {
-          out[i] /= weights[i];
-        }
-      }
-    }
-
-    await audioContext.close();
-
-    return audioBufferToWav(
-      output
-    );
-  }
-
-  /*
-    AudioBuffer → WAV
-  */
-  function audioBufferToWav(
-    buffer: AudioBuffer
-  ): Blob {
-    const numberOfChannels =
-      buffer.numberOfChannels;
-
-    const sampleRate =
-      buffer.sampleRate;
-
-    const length =
-      buffer.length;
-
-    const bytesPerSample = 2;
-
-    const blockAlign =
-      numberOfChannels *
-      bytesPerSample;
-
-    const dataLength =
-      length *
-      blockAlign;
-
-    const arrayBuffer =
-      new ArrayBuffer(
-        44 + dataLength
-      );
-
-    const view =
-      new DataView(arrayBuffer);
-
-    function writeString(
-      offset: number,
-      text: string
-    ) {
-      for (
-        let i = 0;
-        i < text.length;
-        i++
-      ) {
-        view.setUint8(
-          offset + i,
-          text.charCodeAt(i)
-        );
-      }
-    }
-
-    writeString(0, "RIFF");
-
-    view.setUint32(
-      4,
-      36 + dataLength,
-      true
+    setStatus(
+      "MARIN // +6 FORMANT"
     );
 
-    writeString(8, "WAVE");
-    writeString(12, "fmt ");
-
-    view.setUint32(
-      16,
-      16,
-      true
-    );
-
-    view.setUint16(
-      20,
-      1,
-      true
-    );
-
-    view.setUint16(
-      22,
-      numberOfChannels,
-      true
-    );
-
-    view.setUint32(
-      24,
-      sampleRate,
-      true
-    );
-
-    view.setUint32(
-      28,
-      sampleRate * blockAlign,
-      true
-    );
-
-    view.setUint16(
-      32,
-      blockAlign,
-      true
-    );
-
-    view.setUint16(
-      34,
-      16,
-      true
-    );
-
-    writeString(36, "data");
-
-    view.setUint32(
-      40,
-      dataLength,
-      true
-    );
-
-    const channelData = [];
-
-    for (
-      let channel = 0;
-      channel < numberOfChannels;
-      channel++
-    ) {
-      channelData.push(
-        buffer.getChannelData(
-          channel
-        )
-      );
-    }
-
-    let offset = 44;
-
-    for (
-      let i = 0;
-      i < length;
-      i++
-    ) {
-      for (
-        let channel = 0;
-        channel < numberOfChannels;
-        channel++
-      ) {
-        let sample =
-          channelData[channel][i];
-
-        sample = Math.max(
-          -1,
-          Math.min(1, sample)
-        );
-
-        const intSample =
-          sample < 0
-            ? sample * 32768
-            : sample * 32767;
-
-        view.setInt16(
-          offset,
-          intSample,
-          true
-        );
-
-        offset += 2;
-      }
-    }
-
-    return new Blob(
-      [arrayBuffer],
-      {
-        type: "audio/wav",
-      }
-    );
+    sourceNode.start();
   }
 
   async function speak(text: string) {
@@ -351,12 +98,8 @@ export default function Home() {
     setStatus("GENERATING VOICE");
 
     try {
-      /*
-        まず通常速度のMARINを取得
-      */
-      const res = await fetch(
-        "/api/speak",
-        {
+      const res =
+        await fetch("/api/speak", {
           method: "POST",
 
           headers: {
@@ -369,76 +112,30 @@ export default function Home() {
             language: "ja",
             mode: "snappy",
           }),
-        }
-      );
+        });
 
       if (!res.ok) {
         const errorText =
           await res.text();
 
-        console.error(
-          errorText
-        );
+        console.error(errorText);
 
         throw new Error(
           "speech failed"
         );
       }
 
-      const originalBlob =
+      const blob =
         await res.blob();
 
-      /*
-        +6半音だけ上げる
-      */
-      const shiftedBlob =
-        await pitchShift(
-          originalBlob,
-          PITCH_SEMITONES
-        );
-
-      const url =
-        URL.createObjectURL(
-          shiftedBlob
-        );
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-
-      const audio =
-        new Audio(url);
-
-      audioRef.current =
-        audio;
-
-      /*
-        速度は通常
-      */
-      audio.playbackRate = 1.0;
-
-      audio.onplay = () => {
-        setStatus(
-          "MARIN // PITCH +6"
-        );
-      };
-
-      audio.onended = () => {
-        setStatus("READY");
-
-        URL.revokeObjectURL(
-          url
-        );
-      };
-
-      await audio.play();
+      await playShiftedVoice(
+        blob
+      );
 
     } catch (error) {
       console.error(error);
 
-      setStatus(
-        "VOICE ERROR"
-      );
+      setStatus("VOICE ERROR");
     }
   }
 
@@ -447,9 +144,7 @@ export default function Home() {
   ) {
     if (!text.trim()) return;
 
-    setStatus(
-      "TRANSLATING"
-    );
+    setStatus("TRANSLATING");
 
     try {
       const res =
@@ -465,10 +160,8 @@ export default function Home() {
 
             body: JSON.stringify({
               text,
-              sourceLang:
-                "auto",
-              targetLang:
-                "ja",
+              sourceLang: "auto",
+              targetLang: "ja",
             }),
           }
         );
@@ -484,21 +177,14 @@ export default function Home() {
       }
 
       const result =
-        data.translation ||
-        "";
+        data.translation || "";
 
-      setTranslated(
-        result
-      );
+      setTranslated(result);
 
       if (result) {
-        await speak(
-          result
-        );
+        await speak(result);
       } else {
-        setStatus(
-          "READY"
-        );
+        setStatus("READY");
       }
 
     } catch (error) {
@@ -524,8 +210,7 @@ export default function Home() {
           stream
         );
 
-      chunksRef.current =
-        [];
+      chunksRef.current = [];
 
       recorderRef.current =
         recorder;
@@ -600,19 +285,13 @@ export default function Home() {
             setSource(text);
 
             if (text) {
-              await translate(
-                text
-              );
+              await translate(text);
             } else {
-              setStatus(
-                "READY"
-              );
+              setStatus("READY");
             }
 
           } catch (error) {
-            console.error(
-              error
-            );
+            console.error(error);
 
             setStatus(
               "TRANSCRIBE ERROR"
@@ -622,20 +301,14 @@ export default function Home() {
 
       recorder.start();
 
-      setRecording(
-        true
-      );
+      setRecording(true);
 
-      setStatus(
-        "LISTENING"
-      );
+      setStatus("LISTENING");
 
     } catch (error) {
       console.error(error);
 
-      setStatus(
-        "MIC ERROR"
-      );
+      setStatus("MIC ERROR");
     }
   }
 
@@ -654,23 +327,13 @@ export default function Home() {
   return (
     <main
       style={{
-        minHeight:
-          "100vh",
-
-        background:
-          "#05070a",
-
-        color:
-          "white",
-
-        padding:
-          "24px",
-
-        fontFamily:
-          "Arial",
+        minHeight: "100vh",
+        background: "#05070a",
+        color: "white",
+        padding: "24px",
+        fontFamily: "Arial",
       }}
     >
-
       <p>
         FIELD TRANSLATION TERMINAL
       </p>
@@ -685,27 +348,16 @@ export default function Home() {
 
       <div
         style={{
-          padding:
-            "16px",
-
-          border:
-            "1px solid #555",
-
-          borderRadius:
-            "8px",
-
-          marginBottom:
-            "20px",
+          padding: "16px",
+          border: "1px solid #555",
+          borderRadius: "8px",
+          marginBottom: "20px",
         }}
       >
-
         <div
           style={{
-            fontSize:
-              "13px",
-
-            opacity:
-              0.7,
+            fontSize: "13px",
+            opacity: 0.7,
           }}
         >
           VOICE
@@ -713,11 +365,8 @@ export default function Home() {
 
         <div
           style={{
-            fontSize:
-              "22px",
-
-            fontWeight:
-              "bold",
+            fontSize: "22px",
+            fontWeight: "bold",
           }}
         >
           MARIN
@@ -728,101 +377,63 @@ export default function Home() {
         </div>
 
         <div>
-          SPEED 1.00x
+          FORMANT CORRECTION ON
         </div>
 
+        <div>
+          SPEED 1.00x
+        </div>
       </div>
 
       <button
-        onClick={
-          testVoice
-        }
-
+        onClick={testVoice}
         style={{
-          padding:
-            "18px",
-
-          width:
-            "100%",
-
-          fontSize:
-            "18px",
-
-          marginBottom:
-            "22px",
+          padding: "18px",
+          width: "100%",
+          fontSize: "18px",
+          marginBottom: "22px",
         }}
       >
         ▶ TEST DRUM VOICE
       </button>
 
       <textarea
-        value={
-          source
+        value={source}
+        onChange={(e) =>
+          setSource(
+            e.target.value
+          )
         }
-
-        onChange={
-          (e) =>
-            setSource(
-              e.target.value
-            )
-        }
-
         placeholder=
           "話しかけるか、ここに入力"
-
         style={{
-          width:
-            "100%",
-
-          minHeight:
-            "140px",
-
-          padding:
-            "15px",
-
-          fontSize:
-            "18px",
-
-          background:
-            "#111",
-
-          color:
-            "white",
-
-          boxSizing:
-            "border-box",
-
-          borderRadius:
-            "8px",
+          width: "100%",
+          minHeight: "140px",
+          padding: "15px",
+          fontSize: "18px",
+          background: "#111",
+          color: "white",
+          boxSizing: "border-box",
+          borderRadius: "8px",
         }}
       />
 
       <div
         style={{
-          marginTop:
-            "20px",
-
-          display:
-            "flex",
-
-          gap:
-            "10px",
+          marginTop: "20px",
+          display: "flex",
+          gap: "10px",
         }}
       >
-
         <button
           onClick={
             recording
               ? stopRecording
               : startRecording
           }
-
           style={{
-            padding:
-              "20px",
-
-            flex:
-              1,
+            padding: "20px",
+            flex: 1,
           }}
         >
           {recording
@@ -831,22 +442,16 @@ export default function Home() {
         </button>
 
         <button
-          onClick={
-            () =>
-              translate()
+          onClick={() =>
+            translate()
           }
-
           style={{
-            padding:
-              "20px",
-
-            flex:
-              1,
+            padding: "20px",
+            flex: 1,
           }}
         >
           TRANSLATE
         </button>
-
       </div>
 
       <h2>
@@ -855,11 +460,8 @@ export default function Home() {
 
       <div
         style={{
-          fontSize:
-            "24px",
-
-          marginBottom:
-            "20px",
+          fontSize: "24px",
+          marginBottom: "20px",
         }}
       >
         {translated ||
@@ -867,31 +469,18 @@ export default function Home() {
       </div>
 
       <button
-        onClick={
-          () =>
-            speak(
-              translated
-            )
+        onClick={() =>
+          speak(translated)
         }
-
-        disabled={
-          !translated
-        }
-
+        disabled={!translated}
         style={{
-          padding:
-            "16px 24px",
-
-          fontSize:
-            "18px",
-
-          width:
-            "100%",
+          padding: "16px 24px",
+          fontSize: "18px",
+          width: "100%",
         }}
       >
         ▶ REPLAY VOICE
       </button>
-
     </main>
   );
 }
