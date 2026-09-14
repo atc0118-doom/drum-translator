@@ -30,6 +30,8 @@ export default function Home() {
       });
 
       if (!res.ok) {
+        const errorText = await res.text();
+        console.error(errorText);
         throw new Error("speech failed");
       }
 
@@ -134,4 +136,105 @@ export default function Home() {
           }
 
           const text = data.text || "";
-          set
+          setSource(text);
+
+          if (text) {
+            await translate(text);
+          } else {
+            setStatus("READY");
+          }
+        } catch (error) {
+          console.error(error);
+          setStatus("TRANSCRIBE ERROR");
+        }
+      };
+
+      recorder.start();
+      setRecording(true);
+      setStatus("LISTENING");
+    } catch (error) {
+      console.error(error);
+      setStatus("MIC ERROR");
+    }
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop();
+    setRecording(false);
+  }
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#05070a",
+        color: "white",
+        padding: "30px",
+        fontFamily: "Arial",
+      }}
+    >
+      <p>FIELD TRANSLATION TERMINAL</p>
+
+      <h1>DRUM // VOICE</h1>
+
+      <p>STATUS: {status}</p>
+
+      <textarea
+        value={source}
+        onChange={(e) => setSource(e.target.value)}
+        placeholder="話しかけるか、ここに入力"
+        style={{
+          width: "100%",
+          minHeight: "140px",
+          padding: "15px",
+          fontSize: "18px",
+          background: "#111",
+          color: "white",
+        }}
+      />
+
+      <div style={{ marginTop: "20px" }}>
+        <button
+          onClick={recording ? stopRecording : startRecording}
+          style={{
+            padding: "20px",
+            marginRight: "10px",
+          }}
+        >
+          {recording ? "STOP" : "● TALK"}
+        </button>
+
+        <button
+          onClick={() => translate()}
+          style={{
+            padding: "20px",
+          }}
+        >
+          TRANSLATE
+        </button>
+      </div>
+
+      <h2>TRANSLATED</h2>
+
+      <div
+        style={{
+          fontSize: "24px",
+          marginBottom: "20px",
+        }}
+      >
+        {translated || "翻訳結果がここに表示されます"}
+      </div>
+
+      <button
+        onClick={() => speak(translated)}
+        disabled={!translated}
+        style={{
+          padding: "16px 24px",
+          fontSize: "18px",
+        }}
+      >
+        ▶ REPLAY VOICE
+      </button>
+    </main>
+  );
+}
